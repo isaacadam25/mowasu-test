@@ -8,11 +8,13 @@ const {
   getSingleInvoice,
   updateInvoice,
   deleteInvoice,
+  payInvoice,
 } = require('../controllers/invoice.controller');
 
 router.get('/', getAllInvoices);
 router.get('/:id', getSingleInvoice);
 router.post('/', createInvoice);
+router.put('/pay/:invoice_id', payInvoice);
 router.put('/', updateInvoice);
 router.delete('/', deleteInvoice);
 
