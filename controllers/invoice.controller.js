@@ -32,17 +32,9 @@ const createInvoice = async (req, res) => {
   // pull debt
   const data = await Invoice.find({ meter_number: meter_number });
 
-  return res.status(200).json({
-    success: 1,
-    message: 'invoice created',
-    data: data,
-  });
-
-  // return res.send(data);
-
-  // const { remain_amount: debt } = await Invoice.findOne({
-  //   meter_number: meter_number,
-  // });
+  const total_debt = data.reduce((accumulator, object) => {
+    return accumulator + object.debt;
+  }, 0);
 
   const invoice = new Invoice({
     meter_number,
@@ -85,7 +77,7 @@ const createInvoice = async (req, res) => {
 // TODO: PAY INVOICE HERE
 const payInvoice = async (req, res) => {
   let { invoice_id } = req.params;
-  const { meter_number, paid_amount, receipt_number } = req.body;
+  const { paid_amount, receipt_number } = req.body;
 
   // return invoice_id;
 
@@ -102,6 +94,14 @@ const payInvoice = async (req, res) => {
         timestamps: true,
       }
     );
+
+    if (paid_amount > pay_invoice.required_amount || paid_amount <= 0) {
+      return res.status(400).json({
+        success: 1,
+        message: 'The paid amount is greater/less than required',
+        data: null,
+      });
+    }
 
     if (pay_invoice.meter_number) {
       // check if paid amount is equal to required amount
@@ -125,32 +125,37 @@ const payInvoice = async (req, res) => {
 
         return res.status(201).json({
           success: 1,
-          message: 'invoices founds',
+          message: 'Invoice paid with the debt',
           data: debt_invoice,
         });
       }
 
-      return res.status(201).json({
-        success: 1,
-        message: 'invoices founds',
-        data: pay_invoice,
-      });
+      if (required_amount + debt === paid_amount) {
+        // update invoice
+        const complete_invoice = await Invoice.findByIdAndUpdate(
+          invoice_id,
+          {
+            paid_amount: paid_amount,
+            debt: 0,
+            isComplete: true,
+          },
+          {
+            returnDocument: 'after',
+            timestamps: true,
+          }
+        );
+
+        return res.status(201).json({
+          success: 1,
+          message: 'Invoice paid without debt',
+          data: complete_invoice,
+        });
+      }
     }
-
-    const debt_invoices = await Invoice.find({
-      meter_number,
-      isComplete: false,
-      debt: { $ne: 0 },
-    });
-
-    let total_debt = 0;
-    // compute total debt with respect to meter_number
-    const db = debt_invoices.map(({ past_debt }) => (total_debt += past_debt));
-
-    return res.status(201).json({
+    return res.status(404).json({
       success: 1,
-      message: 'invoices founds',
-      data: total_debt,
+      message: 'invoice not found',
+      data: null,
     });
   } catch (error) {
     return res.status(500).json({
@@ -197,11 +202,66 @@ const getSingleInvoice = async (req, res) => {
   }
 };
 
-const updateInvoice = async (req, res) => {
-  return res.status(200).json({
-    success: 1,
-    data: 'Invoice created',
-  });
+const payInvoiceDebt = async (req, res) => {
+  let { invoice_id } = req.params;
+  const { paid_amount, receipt_number } = req.body;
+
+  try {
+    // pull debt
+    const invoice = await Invoice.findById(invoice_id);
+
+    // return res.status(400).json({
+    //   success: 1,
+    //   message: 'Pai',
+    //   data: invoice,
+    // });
+
+    if (paid_amount > invoice.debt || paid_amount <= 0) {
+      return res.status(400).json({
+        success: 1,
+        message: 'Paid amount is greater/less than required',
+        data: null,
+      });
+    }
+
+    if (paid_amount === invoice.debt) {
+      const debt_payed = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        { debt: 0, paid_amount: required_amount, isComplete: true },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      return res.status(200).json({
+        success: 1,
+        message: 'compute deni',
+        data: debt_payed,
+      });
+    } else {
+      const debt = invoice.debt - paid_amount;
+      const total_paid = paid_amount + invoice.paid_amount;
+      const debt_payed = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        { debt: debt, paid_amount: total_paid },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      return res.status(200).json({
+        success: 1,
+        data: debt_payed,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: 0,
+      data: 'Unexpected error occurred',
+    });
+  }
 };
 
 const deleteInvoice = async (req, res) => {
@@ -215,7 +275,7 @@ module.exports = {
   createInvoice,
   getAllInvoices,
   getSingleInvoice,
-  updateInvoice,
+  payInvoiceDebt,
   deleteInvoice,
   payInvoice,
 };

@@ -6,7 +6,7 @@ const {
   createInvoice,
   getAllInvoices,
   getSingleInvoice,
-  updateInvoice,
+  payInvoiceDebt,
   deleteInvoice,
   payInvoice,
 } = require('../controllers/invoice.controller');
@@ -14,8 +14,8 @@ const {
 router.get('/', getAllInvoices);
 router.get('/:id', getSingleInvoice);
 router.post('/', createInvoice);
-router.put('/', updateInvoice);
 router.put('/pay/:invoice_id', payInvoice);
+router.put('/debt-pay/:invoice_id', payInvoiceDebt);
 router.delete('/', deleteInvoice);
 
 module.exports = router;
