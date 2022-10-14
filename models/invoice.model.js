@@ -9,6 +9,7 @@ const invoiceSchema = new Schema(
     receipt_number: {
       type: String,
       required: false,
+      default: null,
     },
     isComplete: {
       type: Boolean,
@@ -20,15 +21,15 @@ const invoiceSchema = new Schema(
       required: true,
     },
     month: {
-      type: String,
+      type: Number,
       required: true,
     },
     year: {
-      type: String,
+      type: Number,
       required: true,
     },
     required_amount: {
-      type: String,
+      type: Number,
       required: true,
     },
     unit_consumed: {
@@ -36,12 +37,14 @@ const invoiceSchema = new Schema(
       required: true,
     },
     paid_amount: {
-      type: String,
+      type: Number,
       required: false,
+      default: 0,
     },
-    past_debt: {
-      type: String,
+    debt: {
+      type: Number,
       required: true,
+      default: 0,
     },
     reading_day: {
       type: Date,

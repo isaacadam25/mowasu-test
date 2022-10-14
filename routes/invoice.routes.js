@@ -14,8 +14,8 @@ const {
 router.get('/', getAllInvoices);
 router.get('/:id', getSingleInvoice);
 router.post('/', createInvoice);
-router.put('/pay/:invoice_id', payInvoice);
 router.put('/', updateInvoice);
+router.put('/pay/:invoice_id', payInvoice);
 router.delete('/', deleteInvoice);
 
 module.exports = router;
