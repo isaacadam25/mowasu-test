@@ -59,7 +59,7 @@ const createInvoice = async (req, res) => {
       dest_addr: phone_number,
     };
 
-    // send_sms(message, receiver);
+    send_sms(message, receiver);
     return res.status(201).json({
       success: 1,
       message: 'invoice created',
@@ -122,6 +122,9 @@ const payInvoice = async (req, res) => {
             timestamps: true,
           }
         );
+        // const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa ni Tsh ${debt_invoice.debt}`;
+
+        // send_sms(message, receiver);
 
         return res.status(201).json({
           success: 1,
