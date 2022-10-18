@@ -47,7 +47,7 @@ const createInvoice = async (req, res) => {
     phone_number,
   });
 
-  const totalBill = required_amount + debt;
+  const totalBill = parseInt(required_amount) + parseInt(debt);
 
   const message = `Ndugu mteja, kiasi cha bili unayodaiwa kwa mwezi ${month} ni Tsh${required_amount}. Deni la nyuma ${debt}. Jumla kuu ${totalBill}. Tafadhali lipa deni lako ndani ya siku 7 kutoka tarehe uliotumiwa ankara kupitia NMB bank akaunti namba 4090250094. Maji ni uhai`;
 
