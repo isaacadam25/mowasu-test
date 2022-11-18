@@ -5,6 +5,7 @@ const customerSchema = new Schema(
     fullname: {
       type: String,
       required: true,
+      lowecase: true,
     },
     gender: {
       type: String,
@@ -19,8 +20,9 @@ const customerSchema = new Schema(
       required: true,
     },
     location: {
-      type: String,
+      type: Schema.Types.ObjectId,
       required: true,
+      ref: 'Location',
     },
   },
   {
