@@ -19,6 +19,6 @@ app.use('/api/v1/invoices', invoiceRouter);
 const { connectDB } = require('./config/dbconfig');
 connectDB();
 
-app.listen(process.env.APP_PORT, () => {
+app.listen(process.env.APP_PORT || process.env.PORT, () => {
   console.log(`Server is up and running on port ${process.env.APP_PORT}`);
 });
