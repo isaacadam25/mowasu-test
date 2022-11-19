@@ -6,26 +6,21 @@ const { send_sms } = require('../services/message.services');
 const createInvoice = async (req, res) => {
   try{
   const {
-    year,
-    month,
-    day,
     current_count,
     previous_count,
-    required_amount,
     customer_id,
     phone_number,
-    invoice_number
+    invoice_number,
+    debt,
+    reading_day
   } = req.body;
 
   if (
-    !month ||
-    !year ||
-    !day ||
-    !required_amount ||
     !current_count ||
     !previous_count ||
     !customer_id ||
-    !invoice_number
+    !invoice_number ||
+    !debt
   ) {
     return res.status(400).json({
       success: 0,
@@ -33,22 +28,39 @@ const createInvoice = async (req, res) => {
     });
   }
 
-  // pull debt
-  const data = await Invoice.find({ customer_id });
+  //TODO: pull debt
+  // const data = await Invoice.find({ customer_id });
 
-  const total_debt = data.reduce((accumulator, object) => {
-    return accumulator + object.debt;
-  }, 0);
+  // const total_debt = data.reduce((accumulator, object) => {
+  //   return accumulator + object.debt;
+  // }, 0);
+
+  const total_debt = parseInt(debt);
+
+  const date = new Date(reading_day);
+
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  const required_amount = (parseInt(current_count) - parseInt(previous_count)) * 1300;
+
+  if (required_amount <= 0) {
+    return res.status(200).json({
+      success: 0,
+      message: "Amount is not valid",
+      data: null,
+    });
+  }
 
   const invoice = new Invoice({
+    day,
     year,
     month,
-    day,
     required_amount,
     current_count,
     previous_count,
-    customer_id,
-    invoice_number
+    invoice_number,
+    customer_id
   });
 
   await invoice.save();
@@ -60,7 +72,7 @@ const createInvoice = async (req, res) => {
     });
   }
   
-  const totalBill = parseInt(required_amount) + parseInt(total_debt);
+  const totalBill = parseInt(required_amount) + total_debt;
 
   const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${total_debt}. Jumla kuu ${totalBill}. Unit ${previous_count}-${current_count}. Lipa deni ndani ya siku 7 kuanzia leo, NMB bank A/C 4090250094.`;
 
@@ -70,11 +82,11 @@ const createInvoice = async (req, res) => {
     };
     
     const isInvoiced = await Customer.findByIdAndUpdate(customer_id, 
-      { isInvoiced: true}, 
-      {
+                              { isInvoiced: true}, {
                                 returnDocument: 'after',
                                 timestamps: true
                               });
+
     if (!isEmpty(isInvoiced) || !isEmpty(invoice)) {
       const sent_message = send_sms(message, receiver);
       return res.status(201).json({
@@ -243,7 +255,7 @@ const getSingleInvoice = async (req, res) => {
   let id = req.params.id;
 
   try {
-    const invoice = await Invoice.findById(id);
+    const invoice = await Invoice.findById(id).populate('customer_id');
     return res.status(201).json({
       success: 1,
       message: 'invoice found',
