@@ -5,7 +5,7 @@ var btoa = require('btoa');
 const api_key = process.env.API_KEY;
 const secret_key = process.env.SECRET_KEY;
 const content_type = 'application/json';
-const source_addr = 'INFO';
+const source_addr = 'MOWASU';
 
 function send_sms(message, receiver) {
   axios
@@ -28,8 +28,11 @@ function send_sms(message, receiver) {
         }),
       }
     )
-    .then((response) => console.log(response, api_key + ':' + secret_key))
-    .catch((error) => console.error(error.response.data));
+    .then((response) => {
+      console.log(response);
+      return response;
+    })
+    .catch((error) => console.error(error));
 }
 
 module.exports = {

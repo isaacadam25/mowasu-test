@@ -1,27 +1,31 @@
+const { isEmpty }  = require('lodash');
 const Invoice = require('../models/invoice.model');
+const Customer = require('../models/customer.model');
 const { send_sms } = require('../services/message.services');
 
 const createInvoice = async (req, res) => {
+  try{
   const {
-    meter_number,
-    month,
     year,
+    month,
+    day,
+    current_count,
+    previous_count,
     required_amount,
-    unit_consumed,
-    reading_day,
-    debt,
+    customer_id,
     phone_number,
+    invoice_number
   } = req.body;
 
   if (
     !month ||
     !year ||
+    !day ||
     !required_amount ||
-    !meter_number ||
-    !unit_consumed ||
-    !reading_day ||
-    !debt ||
-    !phone_number
+    !current_count ||
+    !previous_count ||
+    !customer_id ||
+    !invoice_number
   ) {
     return res.status(400).json({
       success: 0,
@@ -30,41 +34,60 @@ const createInvoice = async (req, res) => {
   }
 
   // pull debt
-  const data = await Invoice.find({ meter_number: meter_number });
+  const data = await Invoice.find({ customer_id });
 
   const total_debt = data.reduce((accumulator, object) => {
     return accumulator + object.debt;
   }, 0);
 
   const invoice = new Invoice({
-    meter_number,
-    month,
     year,
+    month,
+    day,
     required_amount,
-    unit_consumed,
-    reading_day,
-    debt,
-    phone_number,
+    current_count,
+    previous_count,
+    customer_id,
+    invoice_number
   });
 
-  const totalBill = parseInt(required_amount) + parseInt(debt);
+  await invoice.save();
 
-  const message = `Ndugu mteja, kiasi cha bili unayodaiwa kwa mwezi ${month} ni Tsh${required_amount}. Deni la nyuma ${debt}. Jumla kuu ${totalBill}. Tafadhali lipa deni lako ndani ya siku 7 kutoka tarehe uliotumiwa ankara kupitia NMB bank akaunti namba 4090250094. Maji ni uhai`;
+  if (isEmpty(invoice)) {
+    return res.status(400).json({
+      success: 0,
+      message: "Fail to create an invoice"
+    });
+  }
+  
+  const totalBill = parseInt(required_amount) + parseInt(total_debt);
 
-  try {
-    await invoice.save();
+  const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${total_debt}. Jumla kuu ${totalBill}. Unit ${previous_count}-${current_count}. Lipa deni ndani ya siku 7 kuanzia leo, NMB bank A/C 4090250094.`;
 
     const receiver = {
-      recipient_id: 1,
+      recipient_id: 3,
       dest_addr: phone_number,
     };
+    
+    const isInvoiced = await Customer.findByIdAndUpdate(customer_id, 
+      { isInvoiced: true}, 
+      {
+                                returnDocument: 'after',
+                                timestamps: true
+                              });
+    if (!isEmpty(isInvoiced) || !isEmpty(invoice)) {
+      const sent_message = send_sms(message, receiver);
+      return res.status(201).json({
+        success: 1,
+        message: 'invoice created',
+        data: {invoice, sent_message}
+      });
+    }
 
-    send_sms(message, receiver);
-    return res.status(201).json({
-      success: 1,
-      message: 'invoice created',
-      data: invoice,
-    });
+    return res.status(400).json({
+      success: 0,
+      message: "Fail to create an invoice"
+    })
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -76,12 +99,18 @@ const createInvoice = async (req, res) => {
 
 // TODO: PAY INVOICE HERE
 const payInvoice = async (req, res) => {
-  let { invoice_id } = req.params;
-  const { paid_amount, receipt_number } = req.body;
+  try{
+    let { invoice_id } = req.params;
+    const { paid_amount, receipt_number } = req.body;
 
-  // return invoice_id;
+    if (paid_amount <= 0) {
+      return res.status(400).json({
+          success: 0,
+          message: 'The paid amount is invalid',
+          data: null,
+        });
+    }
 
-  try {
     // update invoice
     const pay_invoice = await Invoice.findByIdAndUpdate(
       invoice_id,
@@ -95,15 +124,22 @@ const payInvoice = async (req, res) => {
       }
     );
 
-    if (paid_amount > pay_invoice.required_amount || paid_amount <= 0) {
+    if (isEmpty(pay_invoice)) {
       return res.status(400).json({
-        success: 1,
-        message: 'The paid amount is greater/less than required',
+        success: 0,
+        message: 'Invoice Not Found 1',
         data: null,
       });
     }
 
-    if (pay_invoice.meter_number) {
+    if (paid_amount > pay_invoice.required_amount) {
+      return res.status(400).json({
+        success: 0,
+        message: 'The paid amount is greater than required',
+        data: null,
+      });
+    }
+
       // check if paid amount is equal to required amount
       const { required_amount, debt } = pay_invoice;
 
@@ -122,15 +158,22 @@ const payInvoice = async (req, res) => {
             timestamps: true,
           }
         );
-        // const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa ni Tsh ${debt_invoice.debt}`;
 
-        // send_sms(message, receiver);
-
-        return res.status(201).json({
-          success: 1,
-          message: 'Invoice paid with the debt',
-          data: debt_invoice,
-        });
+        if (!isEmpty(debt_invoice)) {
+          const receiver = {
+            recipient_id: 3,
+            dest_addr: '255718793810',
+          };
+          const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${debt_invoice.month} ni Tsh ${debt_invoice.debt}`;
+  
+          const send_text = send_sms(message, receiver);
+  
+          return res.status(201).json({
+            success: 1,
+            message: 'Invoice paid with the debt',
+            data: {debt_invoice, send_text},
+          });
+        }
       }
 
       if (required_amount + debt === paid_amount) {
@@ -148,13 +191,23 @@ const payInvoice = async (req, res) => {
           }
         );
 
-        return res.status(201).json({
-          success: 1,
-          message: 'Invoice paid without debt',
-          data: complete_invoice,
-        });
+        if (!isEmpty(complete_invoice)) {
+          const receiver = {
+            recipient_id: 3,
+            dest_addr: '255718793810',
+          };
+          const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${complete_invoice.month} ni Tsh ${complete_invoice.debt}`;
+  
+          const send_text = send_sms(message, receiver);
+  
+          return res.status(201).json({
+            success: 1,
+            message: 'Invoice paid without the debt',
+            data: {complete_invoice, send_text},
+          });
+        }
       }
-    }
+
     return res.status(404).json({
       success: 1,
       message: 'invoice not found',
@@ -171,7 +224,7 @@ const payInvoice = async (req, res) => {
 
 const getAllInvoices = async (req, res) => {
   try {
-    const invoice = await Invoice.find();
+    const invoice = await Invoice.find().populate('customer_id');
     return res.status(201).json({
       success: 1,
       message: 'invoices found',

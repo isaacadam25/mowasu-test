@@ -1,21 +1,25 @@
+const { isEmpty } = require('lodash');
 const Customer = require('../models/customer.model');
 
-const createCustomer = async (req, res) => {
-  const { fullname, gender, phone_number, meter_number, location } = req.body;
+const helper = require('../utils/helpers');
 
-  if (!fullname || !gender || !phone_number || !meter_number || !location) {
+const createCustomer = async (req, res) => {
+  const { fullname, gender, phone_number, location } = req.body;
+
+  if (!fullname || !gender || !phone_number || !location) {
     return res.status(400).json({
       success: 0,
       data: 'Fill the required fields',
     });
   }
 
+  const meter_number = `MW-${helper.generateRandomNumber()}`;
   const customer = new Customer({
     fullname,
     gender,
     phone_number,
-    meter_number,
     location,
+    meter_number
   });
 
   try {
@@ -36,12 +40,73 @@ const createCustomer = async (req, res) => {
 
 const getAllCustomers = async (req, res) => {
   try {
-    const customer = await Customer.find();
-    return res.status(201).json({
-      success: 1,
-      message: 'Customers found',
-      data: customer,
+    const customer = await Customer.find().populate('location', 'location_name');
+
+    if (!isEmpty(customer)) {
+      return res.status(200).json({
+        success: 1,
+        message: 'Customers found',
+        data: customer,
+      });
+    }
+
+    return res.status(400).json({
+        success: 0,
+        message: 'No Customers found',
+        data: null,
+      });
+  } catch (error) {
+    return res.status(500).json({
+      success: 0,
+      message: 'Fail to get customers',
+      data: null,
     });
+  }
+};
+
+const getInvoicedCustomers = async (req, res) => {
+  try {
+    const customer = await Customer.find({ isInvoiced: true }).populate('location', 'location_name');
+
+    if (!isEmpty(customer)) {
+      return res.status(200).json({
+        success: 1,
+        message: 'Customers found',
+        data: customer,
+      });
+    }
+
+    return res.status(400).json({
+        success: 0,
+        message: 'No Customers found',
+        data: null,
+      });
+  } catch (error) {
+    return res.status(500).json({
+      success: 0,
+      message: 'Fail to get customers',
+      data: null,
+    });
+  }
+};
+
+const getUnInvoicedCustomers = async (req, res) => {
+  try {
+    const customer = await Customer.find({ isInvoiced: false }).populate('location', 'location_name');
+
+    if (!isEmpty(customer)) {
+      return res.status(200).json({
+        success: 1,
+        message: 'Customers found',
+        data: customer,
+      });
+    }
+
+    return res.status(400).json({
+        success: 0,
+        message: 'No Customers found',
+        data: null,
+      });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -55,12 +120,21 @@ const getSingleCustomer = async (req, res) => {
   let id = req.params.id;
 
   try {
-    const customer = await Customer.findById(id);
-    return res.status(201).json({
-      success: 1,
-      message: 'Customer found',
-      data: customer,
-    });
+    const customer = await Customer.findById(id).populate('location', 'location_name');
+
+    if (customer) {
+      return res.status(201).json({
+        success: 1,
+        message: 'Customer found',
+        data: customer,
+      });
+    }
+
+    return res.status(400).json({
+        success: 0,
+        message: 'No Customers found',
+        data: null,
+      });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -73,9 +147,9 @@ const getSingleCustomer = async (req, res) => {
 const updateCustomer = async (req, res) => {
   let id = req.params.id;
 
-  const { fullname, gender, phone_number, meter_number, location } = req.body;
+  const { fullname, gender, phone_number, location } = req.body;
 
-  if (!fullname || !gender || !phone_number || !meter_number || !location) {
+  if (!fullname || !gender || !phone_number || !location) {
     return res.status(400).json({
       success: 0,
       data: 'Fill the required fields',
@@ -89,7 +163,6 @@ const updateCustomer = async (req, res) => {
         fullname,
         gender,
         phone_number,
-        meter_number,
         location,
       },
       {
@@ -112,10 +185,10 @@ const updateCustomer = async (req, res) => {
 };
 
 const deleteCustomer = async (req, res) => {
-  let id = req.params.id;
-
   try {
-    const customer = await Customer.deleteOne({ id: id });
+    let id = req.params.id;
+
+    const customer = await Customer.findByIdAndDelete(id, { returnDocument: 'after'});
     return res.status(201).json({
       success: 1,
       message: 'Customer deleted',
@@ -132,6 +205,8 @@ const deleteCustomer = async (req, res) => {
 
 module.exports = {
   createCustomer,
+  getInvoicedCustomers,
+  getUnInvoicedCustomers,
   getAllCustomers,
   getSingleCustomer,
   updateCustomer,

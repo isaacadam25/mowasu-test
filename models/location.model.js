@@ -16,7 +16,7 @@ const locationSchema = new Schema(
       type: String,
       required: false,
       default: 0,
-    },
+    }
   },
   {
     timestamps: true,

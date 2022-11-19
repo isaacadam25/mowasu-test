@@ -15,15 +15,21 @@ const customerSchema = new Schema(
       type: String,
       required: true,
     },
-    meter_number: {
-      type: String,
-      required: true,
-    },
     location: {
       type: Schema.Types.ObjectId,
       required: true,
       ref: 'Location',
     },
+    meter_number: {
+      type: String,
+      required: true,
+      default: null
+    },
+    isInvoiced: {
+      type: Boolean,
+      required: false,
+      default: false
+    }
   },
   {
     timestamps: true,

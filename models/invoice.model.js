@@ -2,53 +2,62 @@ const { Schema, model } = require('mongoose');
 
 const invoiceSchema = new Schema(
   {
-    meter_number: {
+    invoice_number: {
       type: String,
       required: true,
-    },
-    receipt_number: {
-      type: String,
-      required: false,
       default: null,
     },
-    isComplete: {
-      type: Boolean,
-      required: false,
+    previous_count: {
+      type: Number,
+      required: true,
       default: 0,
     },
-    phone_number: {
-      type: String,
+    current_count: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    year: {
+      type: Number,
       required: true,
     },
     month: {
       type: Number,
       required: true,
     },
-    year: {
+    day: {
       type: Number,
       required: true,
     },
     required_amount: {
       type: Number,
       required: true,
+      default: 0,
     },
-    unit_consumed: {
+    debt: {
       type: Number,
-      required: true,
+      required: false,
+      default: 0,
+    },
+    isComplete: {
+      type: Boolean,
+      required: false,
+      default: 0,
+    },
+    receipt_number: {
+      type: String,
+      required: false,
+      default: null,
     },
     paid_amount: {
       type: Number,
       required: false,
       default: 0,
     },
-    debt: {
-      type: Number,
+    customer_id: {
+      type: Schema.Types.ObjectId,
       required: true,
-      default: 0,
-    },
-    reading_day: {
-      type: Date,
-      required: true,
+      ref: 'Customer'
     },
   },
   {
