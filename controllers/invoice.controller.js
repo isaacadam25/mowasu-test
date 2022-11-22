@@ -75,7 +75,7 @@ const createInvoice = async (req, res) => {
   
   const totalBill = parseInt(required_amount) + total_debt;
 
-  const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${total_debt}. Jumla kuu ${totalBill}. Unit ${previous_count}-${current_count}. Lipa deni ndani ya siku 7 kuanzia leo, NMB bank A/C 4090250094.`;
+  const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${total_debt}. Jumla ${totalBill}. Unit ${previous_count}-${current_count}. Lipa ndani ya siku 7 kuanzia leo, NMB bank A/C 40902500794.`;
 
     const receiver = {
       recipient_id: 3,
