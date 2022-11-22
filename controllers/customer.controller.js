@@ -1,5 +1,6 @@
 const { isEmpty } = require('lodash');
 const Customer = require('../models/customer.model');
+const Location = require('../models/location.model');
 
 const helper = require('../utils/helpers');
 

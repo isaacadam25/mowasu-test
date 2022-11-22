@@ -60,7 +60,8 @@ const createInvoice = async (req, res) => {
     current_count,
     previous_count,
     invoice_number,
-    customer_id
+    customer_id,
+    debt
   });
 
   await invoice.save();
@@ -113,7 +114,7 @@ const createInvoice = async (req, res) => {
 const payInvoice = async (req, res) => {
   try{
     let { invoice_id } = req.params;
-    const { paid_amount, receipt_number } = req.body;
+    const { paid_amount, receipt_number, phone_number } = req.body;
 
     if (paid_amount <= 0) {
       return res.status(400).json({
@@ -136,6 +137,7 @@ const payInvoice = async (req, res) => {
       }
     );
 
+    
     if (isEmpty(pay_invoice)) {
       return res.status(400).json({
         success: 0,
@@ -143,7 +145,7 @@ const payInvoice = async (req, res) => {
         data: null,
       });
     }
-
+    
     if (paid_amount > pay_invoice.required_amount) {
       return res.status(400).json({
         success: 0,
@@ -151,40 +153,44 @@ const payInvoice = async (req, res) => {
         data: null,
       });
     }
-
-      // check if paid amount is equal to required amount
-      const { required_amount, debt } = pay_invoice;
-
-      if (required_amount + debt > paid_amount) {
-        let new_debt = required_amount + debt - paid_amount;
-
-        // update invoice
-        const debt_invoice = await Invoice.findByIdAndUpdate(
-          invoice_id,
-          {
-            paid_amount: paid_amount,
-            debt: new_debt,
-          },
-          {
-            returnDocument: 'after',
-            timestamps: true,
-          }
+    
+    // check if paid amount is equal to required amount
+    const { required_amount, debt } = pay_invoice;
+    
+    if (parseInt(required_amount) + parseInt(debt) > parseInt(paid_amount)) {
+      let new_debt = required_amount + debt - paid_amount;
+      
+      // update invoice
+      const debt_invoice = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        {
+          paid_amount: paid_amount,
+          debt: new_debt,
+        },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
         );
-
+        
         if (!isEmpty(debt_invoice)) {
           const receiver = {
             recipient_id: 3,
-            dest_addr: '255718793810',
+            dest_addr: phone_number,
           };
           const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${debt_invoice.month} ni Tsh ${debt_invoice.debt}`;
   
           const send_text = send_sms(message, receiver);
+
+         const isInv = await Customer.updateOne({phone_number: phone_number}, {isInvoiced: false}, {timestamps});
   
-          return res.status(201).json({
-            success: 1,
-            message: 'Invoice paid with the debt',
-            data: {debt_invoice, send_text},
-          });
+         if (!isInv || isInv) {
+           return res.status(201).json({
+             success: 1,
+             message: 'Invoice paid with the debt',
+             data: {debt_invoice, send_text},
+           });
+         }
         }
       }
 
@@ -206,23 +212,26 @@ const payInvoice = async (req, res) => {
         if (!isEmpty(complete_invoice)) {
           const receiver = {
             recipient_id: 3,
-            dest_addr: '255718793810',
+            dest_addr: phone_number,
           };
           const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${complete_invoice.month} ni Tsh ${complete_invoice.debt}`;
   
           const send_text = send_sms(message, receiver);
   
+         const isInv = await Customer.updateOne({phone_number: phone_number}, {isInvoiced: false}, {timestamps});
+         if (!isInv || isInv) {
           return res.status(201).json({
             success: 1,
             message: 'Invoice paid without the debt',
             data: {complete_invoice, send_text},
           });
         }
+        }
       }
 
     return res.status(404).json({
-      success: 1,
-      message: 'invoice not found',
+      success: 0,
+      message: 'Fail to pay invoice',
       data: null,
     });
   } catch (error) {
