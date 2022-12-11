@@ -54,10 +54,15 @@ const invoiceSchema = new Schema(
       required: false,
       default: 0,
     },
+    balance: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
     customer_id: {
       type: Schema.Types.ObjectId,
       required: true,
-      ref: 'Customer'
+      ref: 'Customer',
     },
   },
   {

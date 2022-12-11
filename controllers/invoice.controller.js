@@ -1,106 +1,131 @@
-const { isEmpty }  = require('lodash');
 const Invoice = require('../models/invoice.model');
 const Customer = require('../models/customer.model');
+const Transaction = require('../models/transaction.model');
+const { isEmpty, last, sortBy } = require('lodash');
 const { send_sms } = require('../services/message.services');
 
 const createInvoice = async (req, res) => {
-  try{
-  const {
-    current_count,
-    previous_count,
-    customer_id,
-    phone_number,
-    invoice_number,
-    debt,
-    reading_day
-  } = req.body;
+  try {
+    const {
+      current_count: current,
+      customer_id,
+      phone_number,
+      invoice_number,
+      reading_day,
+    } = req.body;
 
-  if (
-    !current_count ||
-    !previous_count ||
-    !customer_id ||
-    !invoice_number ||
-    !debt
-  ) {
-    return res.status(400).json({
-      success: 0,
-      data: 'Fill the required fields',
+    if (!current || !customer_id || !invoice_number) {
+      return res.status(400).json({
+        success: 0,
+        data: 'Fill the required fields',
+      });
+    }
+
+    // -> pull debt and previous units
+    const data = await Invoice.find({ customer_id });
+
+    if (isEmpty(data)) {
+      return res.status(400).json({
+        success: 0,
+        data: null,
+        message: 'Fail to get customer details',
+      });
+    }
+
+    // -> sort data by month
+    const sorted = sortBy(data, (o) => o.month);
+
+    // -> extract current unit form last invoice
+    const { current_count, debt } = last(sorted);
+
+    if (!current_count) {
+      return res.status(400).json({
+        success: 0,
+        data: null,
+        message: 'Fail to get customer details',
+      });
+    }
+
+    if (current_count > current) {
+      return res.status(400).json({
+        success: 0,
+        data: null,
+        message: `Previous units can not be greater than current units. ${current_count} - ${current}`,
+      });
+    }
+
+    const deni = parseInt(debt);
+
+    const date = new Date(reading_day);
+
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const required_amount =
+      (parseInt(current) - parseInt(current_count)) * 1300;
+
+    if (required_amount <= 0) {
+      return res.status(200).json({
+        success: 0,
+        message: 'Amount is not be less or equal to zero',
+        data: null,
+      });
+    }
+
+    const invoice = new Invoice({
+      day,
+      year,
+      month,
+      required_amount,
+      current_count: current,
+      previous_count: current_count,
+      invoice_number,
+      customer_id,
+      debt: deni,
     });
-  }
 
-  //TODO: pull debt
-  // const data = await Invoice.find({ customer_id });
+    await invoice.save();
 
-  // const total_debt = data.reduce((accumulator, object) => {
-  //   return accumulator + object.debt;
-  // }, 0);
+    if (isEmpty(invoice)) {
+      return res.status(400).json({
+        success: 0,
+        message: 'Fail to create an invoice',
+      });
+    }
 
-  const total_debt = parseInt(debt);
+    const totalBill = parseInt(required_amount) + deni;
 
-  const date = new Date(reading_day);
-
-  const day = date.getDate();
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-  const required_amount = (parseInt(current_count) - parseInt(previous_count)) * 1300;
-
-  if (required_amount <= 0) {
-    return res.status(200).json({
-      success: 0,
-      message: "Amount is not valid",
-      data: null,
-    });
-  }
-
-  const invoice = new Invoice({
-    day,
-    year,
-    month,
-    required_amount,
-    current_count,
-    previous_count,
-    invoice_number,
-    customer_id,
-    debt
-  });
-
-  await invoice.save();
-
-  if (isEmpty(invoice)) {
-    return res.status(400).json({
-      success: 0,
-      message: "Fail to create an invoice"
-    });
-  }
-  
-  const totalBill = parseInt(required_amount) + total_debt;
-
-  const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${total_debt}. Jumla ${totalBill}. Unit ${previous_count}-${current_count}. Lipa ndani ya siku 7 kuanzia leo, NMB bank A/C 40902500794.`;
+    const message = `Ndugu mteja, bili unayodaiwa mwezi ${month}. Tsh ${required_amount}. Deni la nyuma ${deni}. Jumla ${totalBill}. Unit ${current_count}-${current}. Lipa ndani ya siku 7 kuanzia leo, NMB bank A/C 40902500794.`;
 
     const receiver = {
       recipient_id: 3,
       dest_addr: phone_number,
     };
-    
-    const isInvoiced = await Customer.findByIdAndUpdate(customer_id, 
-                              { isInvoiced: true}, {
-                                returnDocument: 'after',
-                                timestamps: true
-                              });
+
+    const isInvoiced = await Customer.findByIdAndUpdate(
+      customer_id,
+      { isInvoiced: true },
+      {
+        returnDocument: 'after',
+        timestamps: true,
+      }
+    );
 
     if (!isEmpty(isInvoiced) || !isEmpty(invoice)) {
-      const sent_message = send_sms(message, receiver);
+      if (phone_number) {
+        send_sms(message, receiver);
+      }
       return res.status(201).json({
         success: 1,
         message: 'invoice created',
-        data: {invoice, sent_message}
+        data: { invoice },
       });
     }
 
     return res.status(400).json({
       success: 0,
-      message: "Fail to create an invoice"
-    })
+      message: 'Fail to create an invoice',
+    });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -112,127 +137,313 @@ const createInvoice = async (req, res) => {
 
 // TODO: PAY INVOICE HERE
 const payInvoice = async (req, res) => {
-  try{
+  try {
     let { invoice_id } = req.params;
-    const { paid_amount, receipt_number, phone_number } = req.body;
+    const { paid_amount, receipt_number, customer_id } = req.body;
 
     if (paid_amount <= 0) {
       return res.status(400).json({
-          success: 0,
-          message: 'The paid amount is invalid',
-          data: null,
-        });
-    }
-
-    // update invoice
-    const pay_invoice = await Invoice.findByIdAndUpdate(
-      invoice_id,
-      {
-        paid_amount: paid_amount,
-        receipt_number: receipt_number,
-      },
-      {
-        returnDocument: 'after',
-        timestamps: true,
-      }
-    );
-
-    
-    if (isEmpty(pay_invoice)) {
-      return res.status(400).json({
         success: 0,
-        message: 'Invoice Not Found 1',
+        message: 'The paid amount is can not be less or equal to zero',
         data: null,
       });
     }
-    
-    if (paid_amount > pay_invoice.required_amount) {
-      return res.status(400).json({
+
+    // -> get invoice details
+    const invoice = await Invoice.findById(invoice_id);
+
+    if (isEmpty(invoice)) {
+      return res.status(404).json({
         success: 0,
-        message: 'The paid amount is greater than required',
         data: null,
+        message: 'Invoice details not found',
       });
     }
-    
-    // check if paid amount is equal to required amount
-    const { required_amount, debt } = pay_invoice;
-    
-    if (parseInt(required_amount) + parseInt(debt) > parseInt(paid_amount)) {
-      let new_debt = required_amount + debt - paid_amount;
-      
-      // update invoice
-      const debt_invoice = await Invoice.findByIdAndUpdate(
-        invoice_id,
+
+    const { required_amount, debt } = invoice;
+
+    // -> check if required amount is greater than zero
+    if (required_amount <= 0) {
+      return res.status(400).json({
+        success: 0,
+        data: null,
+        message: 'Required amount can not be less or equal to zero',
+      });
+    }
+
+    // -> check if required amount is greater than paid amount required amount
+    if (required_amount > parseInt(paid_amount)) {
+      let new_debt = debt + (required_amount - paid_amount);
+
+      // -> set isInvoiced == false
+      const customer = await Customer.findByIdAndUpdate(
+        customer_id,
         {
-          paid_amount: paid_amount,
-          debt: new_debt,
+          isInvoiced: false,
         },
         {
           returnDocument: 'after',
           timestamps: true,
         }
-        );
-        
-        if (!isEmpty(debt_invoice)) {
-          const receiver = {
-            recipient_id: 3,
-            dest_addr: phone_number,
-          };
-          const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${debt_invoice.month} ni Tsh ${debt_invoice.debt}`;
-  
-          const send_text = send_sms(message, receiver);
+      );
 
-         const isInv = await Customer.updateOne({phone_number: phone_number}, {isInvoiced: false}, {timestamps});
-  
-         if (!isInv || isInv) {
-           return res.status(201).json({
-             success: 1,
-             message: 'Invoice paid with the debt',
-             data: {debt_invoice, send_text},
-           });
-         }
-        }
+      if (isEmpty(customer)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
       }
 
-      if (required_amount + debt === paid_amount) {
-        // update invoice
-        const complete_invoice = await Invoice.findByIdAndUpdate(
+      // -> generate transaction
+      const transaction = new Transaction({
+        customer: customer_id,
+        invoice: invoice_id,
+        amount: paid_amount,
+        receipt_number: receipt_number,
+        description: 'Monthly payment',
+      });
+
+      await transaction.save();
+
+      if (isEmpty(transaction)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
+      }
+
+      // -> update invoice debt
+      const updatedInvoice = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        {
+          debt: new_debt,
+          isComplete: true,
+          paid_amount: paid_amount,
+        },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      if (isEmpty(updatedInvoice)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
+      }
+
+      return res.status(200).json({
+        success: 1,
+        data: updatedInvoice,
+        message: 'Invoice paid Successfully',
+      });
+    }
+
+    // -> check if paid amount is equal to required amount
+    if (parseInt(paid_amount) === required_amount) {
+      // -> set isInvoiced == false
+      const customer = await Customer.findByIdAndUpdate(
+        customer_id,
+        {
+          isInvoiced: false,
+        },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      if (isEmpty(customer)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
+      }
+
+      // -> generate transaction
+      const transaction = new Transaction({
+        customer: customer_id,
+        invoice: invoice_id,
+        amount: paid_amount,
+        receipt_number: receipt_number,
+        description: 'Monthly payment',
+      });
+
+      await transaction.save();
+
+      if (isEmpty(transaction)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
+      }
+
+      // -> update invoice debt
+      const updatedInvoice = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        {
+          isComplete: true,
+          paid_amount: paid_amount,
+        },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      if (isEmpty(updatedInvoice)) {
+        return res.status(400).json({
+          success: 0,
+          data: null,
+          message: 'Fail to pay invoice. Please try again later',
+        });
+      }
+
+      return res.status(200).json({
+        success: 1,
+        data: updatedInvoice,
+        message: 'Invoice paid Successfully',
+      });
+    }
+
+    // -> check if paid amount is greater than required amount
+    if (parseInt(paid_amount) > required_amount) {
+      let balance = paid_amount - required_amount;
+
+      if (balance > debt) {
+        // -> update invoice details
+        const paidInvoice = await Invoice.findByIdAndUpdate(
           invoice_id,
           {
-            paid_amount: paid_amount,
             debt: 0,
             isComplete: true,
+            balance: balance,
+            paid_amount: paid_amount,
           },
           {
-            returnDocument: 'after',
+            new: true,
             timestamps: true,
           }
         );
 
-        if (!isEmpty(complete_invoice)) {
-          const receiver = {
-            recipient_id: 3,
-            dest_addr: phone_number,
-          };
-          const message = `Ndugu mteja, Umelipa ankara Tsh ${paid_amount}. Kiasi unachodaiwa kwa mwezi ${complete_invoice.month} ni Tsh ${complete_invoice.debt}`;
-  
-          const send_text = send_sms(message, receiver);
-  
-         const isInv = await Customer.updateOne({phone_number: phone_number}, {isInvoiced: false}, {timestamps});
-         if (!isInv || isInv) {
-          return res.status(201).json({
-            success: 1,
-            message: 'Invoice paid without the debt',
-            data: {complete_invoice, send_text},
+        if (isEmpty(paidInvoice)) {
+          return res.status(400).json({
+            success: 0,
+            message: 'Fail to pay invoices 1',
+            data: null,
           });
         }
+
+        const updatedCustomer = await Customer.findByIdAndUpdate(
+          customer_id,
+          {
+            isInvoiced: false,
+          },
+          {
+            returnDocument: 'after',
+          }
+        );
+
+        // -> generate transaction
+        const transaction = new Transaction({
+          customer: customer_id,
+          invoice: invoice_id,
+          amount: paid_amount,
+          receipt_number: receipt_number,
+          description: 'Monthly payment',
+        });
+
+        await transaction.save();
+
+        if (
+          !isEmpty(updatedCustomer) &&
+          !isEmpty(transaction) &&
+          !isEmpty(paidInvoice)
+        ) {
+          return res.status(200).json({
+            success: 1,
+            message: 'Invoice paid successfully',
+            data: paidInvoice,
+          });
         }
       }
 
-    return res.status(404).json({
+      let new_debt = debt - balance;
+
+      if (new_debt < 0) {
+        return res.status(400).json({
+          success: 0,
+          message: 'Fail to pay invoices 2',
+          data: null,
+        });
+      }
+
+      // -> update invoice details
+      const paidInvoice = await Invoice.findByIdAndUpdate(
+        invoice_id,
+        {
+          debt: new_debt,
+          isComplete: true,
+          paid_amount: paid_amount,
+        },
+        {
+          new: true,
+          timestamps: true,
+        }
+      );
+
+      // -> update customer details
+      const updatedCustomer = await Customer.findByIdAndUpdate(
+        customer_id,
+        {
+          isInvoiced: false,
+        },
+        {
+          returnDocument: 'after',
+          timestamps: true,
+        }
+      );
+
+      // -> generate transaction
+      const transaction = new Transaction({
+        customer: customer_id,
+        invoice: invoice_id,
+        amount: paid_amount,
+        receipt_number: receipt_number,
+        description: 'Monthly payment',
+      });
+
+      await transaction.save();
+
+      if (
+        isEmpty(paidInvoice) ||
+        isEmpty(updatedCustomer) ||
+        isEmpty(transaction)
+      ) {
+        return res.status(400).json({
+          success: 0,
+          message: 'Fail to pay invoices 3',
+          data: null,
+        });
+      }
+
+      return res.status(200).json({
+        success: 1,
+        message: 'Invoice payed successfully',
+        data: paidInvoice,
+      });
+    }
+
+    return res.status(400).json({
       success: 0,
-      message: 'Fail to pay invoice',
       data: null,
+      message: 'Invoice details not found',
     });
   } catch (error) {
     return res.status(500).json({
