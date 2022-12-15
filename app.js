@@ -13,14 +13,18 @@ const customerRouter = require('./routes/customer.routes');
 const userRouter = require('./routes/user.routes');
 const invoiceRouter = require('./routes/invoice.routes');
 const locationRouter = require('./routes/location.routes');
+const transactionRouter = require('./routes/transaction.routes');
 
 app.use('/api/v1/customers', customerRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/invoices', invoiceRouter);
 app.use('/api/v1/locations', locationRouter);
+app.use('/api/v1/transactions', transactionRouter);
 
 connectDB();
 
 app.listen(process.env.APP_PORT || process.env.PORT, () => {
-  console.log(`Server is up and running on port ${process.env.APP_PORT || 4000}`);
+  console.log(
+    `Server is up and running on port ${process.env.APP_PORT || 4000}`
+  );
 });
