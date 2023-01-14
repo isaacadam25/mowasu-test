@@ -2,46 +2,52 @@ const { isEmpty } = require('lodash');
 const Customer = require('../models/customer.model');
 const Location = require('../models/location.model');
 
+const customerQueries = require('../models/queries/customerQueries');
+
 const helper = require('../utils/helpers');
 
+// -> create customer function
 const createCustomer = async (req, res) => {
-  const { fullname, gender, phone_number, location } = req.body;
-
-  if (!fullname || !gender || !phone_number || !location) {
-    return res.status(400).json({
-      success: 0,
-      data: 'Fill the required fields',
-    });
-  }
-
-  const meter_number = `MW-${helper.generateRandomNumber()}`;
-  const customer = new Customer({
-    fullname,
-    gender,
-    phone_number,
-    location,
-    meter_number
-  });
-
   try {
-    await customer.save();
+    const { fullname, gender, phone_number, location } = req.body;
+
+    if (!fullname || !gender || !location) {
+      return res.status(400).json({
+        success: 0,
+        data: 'Fill the required fields',
+      });
+    }
+    const customer_phone = phone_number ? phone_number : null;
+    const meter_number = `MW-${helper.generateRandomNumber()}`;
+    const customer = await customerQueries.addNewCustomer({
+      fullname,
+      gender,
+      location,
+      meter_number,
+      phone_number: customer_phone,
+    });
+
     return res.status(201).json({
       success: 1,
-      message: 'Customer created',
+      message: 'Customer created successfully',
       data: customer,
     });
   } catch (error) {
     return res.status(500).json({
       success: 0,
-      message: 'Fail to create new customer',
+      message: 'Unexpected error occurred',
       data: null,
     });
   }
 };
 
+// -> get all customers function
 const getAllCustomers = async (req, res) => {
   try {
-    const customer = await Customer.find().populate('location', 'location_name');
+    const customer = await Customer.find().populate(
+      'location',
+      'location_name'
+    );
 
     if (!isEmpty(customer)) {
       return res.status(200).json({
@@ -52,10 +58,10 @@ const getAllCustomers = async (req, res) => {
     }
 
     return res.status(400).json({
-        success: 0,
-        message: 'No Customers found',
-        data: null,
-      });
+      success: 0,
+      message: 'No Customers found',
+      data: null,
+    });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -67,7 +73,10 @@ const getAllCustomers = async (req, res) => {
 
 const getInvoicedCustomers = async (req, res) => {
   try {
-    const customer = await Customer.find({ isInvoiced: true }).populate('location', 'location_name');
+    const customer = await Customer.find({ isInvoiced: true }).populate(
+      'location',
+      'location_name'
+    );
 
     if (!isEmpty(customer)) {
       return res.status(200).json({
@@ -78,10 +87,10 @@ const getInvoicedCustomers = async (req, res) => {
     }
 
     return res.status(400).json({
-        success: 0,
-        message: 'No Customers found',
-        data: null,
-      });
+      success: 0,
+      message: 'No Customers found',
+      data: null,
+    });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -93,7 +102,10 @@ const getInvoicedCustomers = async (req, res) => {
 
 const getUnInvoicedCustomers = async (req, res) => {
   try {
-    const customer = await Customer.find({ isInvoiced: false }).populate('location', 'location_name');
+    const customer = await Customer.find({ isInvoiced: false }).populate(
+      'location',
+      'location_name'
+    );
 
     if (!isEmpty(customer)) {
       return res.status(200).json({
@@ -104,10 +116,10 @@ const getUnInvoicedCustomers = async (req, res) => {
     }
 
     return res.status(400).json({
-        success: 0,
-        message: 'No Customers found',
-        data: null,
-      });
+      success: 0,
+      message: 'No Customers found',
+      data: null,
+    });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -117,11 +129,15 @@ const getUnInvoicedCustomers = async (req, res) => {
   }
 };
 
+// -> get single customer details
 const getSingleCustomer = async (req, res) => {
   let id = req.params.id;
 
   try {
-    const customer = await Customer.findById(id).populate('location', 'location_name');
+    const customer = await Customer.findById(id).populate(
+      'location',
+      'location_name'
+    );
 
     if (customer) {
       return res.status(201).json({
@@ -132,10 +148,10 @@ const getSingleCustomer = async (req, res) => {
     }
 
     return res.status(400).json({
-        success: 0,
-        message: 'No Customers found',
-        data: null,
-      });
+      success: 0,
+      message: 'No Customers found',
+      data: null,
+    });
   } catch (error) {
     return res.status(500).json({
       success: 0,
@@ -146,40 +162,45 @@ const getSingleCustomer = async (req, res) => {
 };
 
 const updateCustomer = async (req, res) => {
-  let id = req.params.id;
-
-  const { fullname, gender, phone_number, location } = req.body;
-
-  if (!fullname || !gender || !phone_number || !location) {
-    return res.status(400).json({
-      success: 0,
-      data: 'Fill the required fields',
-    });
-  }
-
   try {
-    const customer = await Customer.findByIdAndUpdate(
-      id,
-      {
-        fullname,
-        gender,
-        phone_number,
-        location,
-      },
-      {
-        returnDocument: 'after',
-        timestamps: true,
-      }
-    );
+    let id = req.params.id;
+
+    const { fullname, gender, phone_number, location } = req.body;
+
+    if (!fullname || !gender || !location) {
+      return res.status(400).json({
+        success: 0,
+        data: 'Fill the required fields',
+      });
+    }
+
+    const customer_phone = phone_number ? phone_number : null;
+
+    // -> update customer details
+    const updatedCustomer = await customerQueries.updateCustomerDetails(id, {
+      fullname,
+      gender,
+      phone_number: customer_phone,
+      location,
+    });
+
+    if (!isEmpty(updatedCustomer)) {
+      return res.status(201).json({
+        success: 1,
+        message: 'Customer updated successfully',
+        data: updatedCustomer,
+      });
+    }
+
     return res.status(201).json({
-      success: 1,
-      message: 'Customer updated',
-      data: customer,
+      success: 0,
+      message: 'Customer not updated',
+      data: null,
     });
   } catch (error) {
     return res.status(500).json({
       success: 0,
-      message: 'Fail to update customer',
+      message: 'Unexpected error occurred',
       data: null,
     });
   }
@@ -189,7 +210,9 @@ const deleteCustomer = async (req, res) => {
   try {
     let id = req.params.id;
 
-    const customer = await Customer.findByIdAndDelete(id, { returnDocument: 'after'});
+    const customer = await Customer.findByIdAndDelete(id, {
+      returnDocument: 'after',
+    });
     return res.status(201).json({
       success: 1,
       message: 'Customer deleted',

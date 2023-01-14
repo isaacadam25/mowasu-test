@@ -2,6 +2,10 @@ const { Schema, model } = require('mongoose');
 
 const transactionSchema = new Schema(
   {
+    reference_number: {
+      type: String,
+      required: true,
+    },
     customer: {
       type: Schema.Types.ObjectId,
       required: true,

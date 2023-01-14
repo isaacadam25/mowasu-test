@@ -1,5 +1,10 @@
 const Transaction = require('../transaction.model');
 
+// -> create new transaction
+const createTransaction = (payload) => {
+  return Transaction.create(payload);
+};
+
 // -> get transaction by id
 const getById = (transaction_id) => {
   return Transaction.findById(transaction_id)
@@ -15,6 +20,7 @@ const getByCustomerId = (customer_id) => {
 };
 
 module.exports = {
+  createTransaction,
   getById,
   getByCustomerId,
 };

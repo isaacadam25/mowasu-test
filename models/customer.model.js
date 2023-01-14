@@ -13,7 +13,7 @@ const customerSchema = new Schema(
     },
     phone_number: {
       type: String,
-      required: true,
+      required: false,
     },
     location: {
       type: Schema.Types.ObjectId,
@@ -23,13 +23,13 @@ const customerSchema = new Schema(
     meter_number: {
       type: String,
       required: true,
-      default: null
+      default: null,
     },
     isInvoiced: {
       type: Boolean,
       required: false,
-      default: false
-    }
+      default: false,
+    },
   },
   {
     timestamps: true,
